@@ -103,7 +103,8 @@
       <li>Save the spreadsheet from the email (.xlsx, .xls or .csv) and drop it below. You can drop several at once.</li>
       <li>Every row whose weight is <strong>0</strong> gets the net weight read from that carton's GS1 barcode
         (AI <strong>310n</strong>, net kg; e.g. <span style="font-family:var(--mono)">3102 001570</span> = 15.70 kg).</li>
-      <li>Check the list of changes, then download the fixed file. Nothing else in the file is changed.</li>
+      <li>Check the list of changes, then click <strong>Download CSV for Thomax</strong> and save it to the SFTP
+        (<span style="font-family:var(--mono)">S:\Production\ToWMS\PurchaseOrder\GenericASN</span>). Nothing else in the file is changed.</li>
     </ol>
     <p class="hint" style="margin-top:8px">Files never leave your computer. Everything happens in this browser tab.</p>
   </div>
@@ -122,7 +123,7 @@
 
   <div id="results"></div>
   <div class="actions" id="allActions" hidden>
-    <button class="primary" id="downloadAll">Download all fixed files</button>
+    <button class="primary" id="downloadAll">Download all CSVs for Thomax</button>
   </div>
 </main>
 
@@ -282,7 +283,9 @@ function processFile(f) {
   f.result = res;
 }
 
-function buildOutput(f) {
+// format 'csv' = what goes on the Thomax SFTP (GenericASN): UTF-8 with BOM, CRLF,
+// cells as displayed (dates dd/mm/yyyy), original file name. 'xlsx' = fixed spreadsheet.
+function buildOutput(f, format) {
   // Work on a copy so re-running with different options always starts from the original.
   const wb = XLSX.read(f.bytes, readOpts(f.ext));
   const ws = wb.Sheets[f.sheetName];
@@ -296,9 +299,9 @@ function buildOutput(f) {
   }
   const dot = f.name.lastIndexOf('.');
   const base = dot > 0 ? f.name.slice(0, dot) : f.name;
-  if (f.ext === 'csv') {
-    const csv = XLSX.utils.sheet_to_csv(ws);
-    return { name: `${base} FIXED.csv`, blob: new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }) };
+  if (format === 'csv') {
+    const csv = XLSX.utils.sheet_to_csv(ws, { RS: '\r\n', blankrows: false });
+    return { name: `${base}.csv`, blob: new Blob(['﻿' + csv + '\r\n'], { type: 'text/csv;charset=utf-8' }) };
   }
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellDates: true });
   return { name: `${base} FIXED.xlsx`, blob: new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) };
@@ -337,7 +340,7 @@ drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('
 fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
 [optBlank, optMismatch].forEach(el => el.addEventListener('change', () => { files.forEach(processFile); render(); }));
 document.getElementById('downloadAll').addEventListener('click', () => {
-  files.filter(canDownload).forEach((f, i) => setTimeout(() => download(buildOutput(f)), i * 400));
+  files.filter(canDownload).forEach((f, i) => setTimeout(() => download(buildOutput(f, 'csv')), i * 400));
 });
 
 function canDownload(f) {
@@ -420,7 +423,8 @@ function render() {
     const mism = r.mismatches.length ? `<details><summary>${r.mismatches.length} non-zero weight${r.mismatches.length > 1 ? 's' : ''} don't match the barcode ${optMismatch.checked ? '(corrected)' : '(left as is - tick the option above to correct)'}</summary>${changeTable(f, r.mismatches, 'mismatch')}</details>` : '';
     return `<div class="panel">${header}${stats}${msg}
       <div class="actions" style="margin-top:0">
-        <button class="primary" data-dl="${i}" ${applied ? '' : 'disabled'}>Download fixed file (${applied} change${applied === 1 ? '' : 's'})</button>
+        <button class="primary" data-dl="${i}" data-fmt="csv" ${applied ? '' : 'disabled'}>Download CSV for Thomax (${applied} change${applied === 1 ? '' : 's'})</button>
+        <button data-dl="${i}" data-fmt="xlsx" ${applied ? '' : 'disabled'}>Download as .xlsx</button>
         <button data-rm="${i}">Remove</button>
       </div>
       ${failed}${fixed}${mism}
@@ -432,7 +436,7 @@ function render() {
 
 results.addEventListener('click', e => {
   const dl = e.target.closest('[data-dl]');
-  if (dl) { download(buildOutput(files[+dl.dataset.dl])); return; }
+  if (dl) { download(buildOutput(files[+dl.dataset.dl], dl.dataset.fmt)); return; }
   const rm = e.target.closest('[data-rm]');
   if (rm) { files.splice(+rm.dataset.rm, 1); render(); }
 });

@@ -23,8 +23,9 @@ weight is in the barcode in the **Expected Serial Number** column. This page:
   fixed by hand
 - Optionally fills blank weights, and optionally corrects non-zero weights
   that disagree with the barcode (both off by default)
-- Downloads `<original name> FIXED.xlsx` (or `.csv` for CSV input) with only
-  the weight cells changed
+- **Download CSV for Thomax** gives `<original name>.csv` in exactly the format the
+  Thomax SFTP `GenericASN` folder takes (UTF-8 with BOM, CRLF, dates dd/mm/yyyy),
+  with only the weight cells changed. A fixed `.xlsx` is also available.
 
 No login, no server - files are read and written entirely in the browser.
 
@@ -33,7 +34,8 @@ No login, no server - files are read and written entirely in the browser.
 1. Save the attachment from the email
 2. Open the page and drop the file in (several at once is fine)
 3. Check the list of changes
-4. Click **Download fixed file**
+4. Click **Download CSV for Thomax** and save it to
+   `S:\Production\ToWMS\PurchaseOrder\GenericASN`
 
 ## Files
 
