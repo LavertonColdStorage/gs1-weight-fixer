@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GS1 Weight Fixer - Laverton Cold Storage</title>
+<link rel="icon" href="Chilled-LavertonCS-1.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #14181d; --ink-soft: #5b6672;
+    --line: #e2e6ea; --accent: #1f5fa9;
+    --critical: #c02637; --critical-bg: #fdecee;
+    --serious: #c26a00; --serious-bg: #fdf2e3;
+    --ok: #1d7a4c; --ok-bg: #e9f6ee;
+    --radius: 10px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14181d; --panel: #1c2127; --ink: #e8ecf1; --ink-soft: #9aa6b3;
+      --line: #2a313a; --accent: #6aa5e8;
+      --critical: #ff7b8a; --critical-bg: #33191d;
+      --serious: #f0a95a; --serious-bg: #2f2416;
+      --ok: #63c795; --ok-bg: #16281f;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .brandBar { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+    text-align: center; padding: 20px 20px 24px; color: #fff; }
+  .brandBar img { max-width: 200px; height: auto; display: block; margin: 0 auto 8px; }
+  .brandBar h1 { font-size: 19px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  .brandBar p { margin: 4px 0 0; font-size: 12.5px; opacity: .85; }
+  .sub { color: var(--ink-soft); font-size: 13px; }
+  button, select { font: inherit; color: inherit; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .5; cursor: default; }
+  main { padding: 18px 16px 60px; max-width: 1200px; margin: 0 auto; }
+  .banner { border-radius: var(--radius); padding: 10px 14px; margin-bottom: 16px;
+    border: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+  .banner.error { background: var(--critical-bg); border-color: var(--critical); color: var(--critical); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; margin-bottom: 18px; }
+  .panel h2 { margin: 0 0 4px; font-size: 15px; }
+  .panel p.hint { margin: 0 0 16px; color: var(--ink-soft); font-size: 13px; }
+  .panel ol.hint { margin: 0 0 4px; padding-left: 20px; color: var(--ink-soft); font-size: 13px; }
+  .drop { border: 2px dashed var(--line); border-radius: var(--radius); padding: 28px 16px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--bg); }
+  .drop strong { display: block; font-size: 15px; margin-bottom: 4px; }
+  .options { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--ink-soft); }
+  .options label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  .fileHead { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+  .fileHead h2 { word-break: break-all; }
+  .colPick { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+  .colPick label { display: block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 4px; }
+  .colPick select { width: 100%; }
+  .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
+  .stat { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 8px 14px; min-width: 110px; }
+  .stat .n { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 11.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+  .stat.ok .n { color: var(--ok); }
+  .stat.bad .n { color: var(--critical); }
+  .stat.warn .n { color: var(--serious); }
+  .tableWrap { overflow-x: auto; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--ink-soft); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-weight: 600; font-size: 11.5px; white-space: nowrap; }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.bad { background: var(--critical-bg); color: var(--critical); }
+  .pill.warn { background: var(--serious-bg); color: var(--serious); }
+  details { margin-top: 10px; }
+  details summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .ai { color: var(--accent); font-weight: 700; }
+  .wt { background: var(--ok-bg); color: var(--ok); border-radius: 3px; padding: 0 2px; }
+  @media (max-width: 600px) { .panel { padding: 14px; } .stat { min-width: 0; flex: 1 1 40%; } }
+</style>
+</head>
+<body>
+<div class="brandBar">
+  <img src="Chilled-LavertonCS-1.png" alt="Laverton Cold Storage">
+  <h1>GS1 Weight Fixer</h1>
+  <p>Fill in zero carton weights from the GS1 barcode</p>
+</div>
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="panel">
+    <h2>How it works</h2>
+    <ol class="hint">
+      <li>Save the spreadsheet from the email (.xlsx, .xls or .csv) and drop it below. You can drop several at once.</li>
+      <li>Every row whose weight is <strong>0</strong> gets the net weight read from that carton's GS1 barcode
+        (AI <strong>310n</strong>, net kg; e.g. <span style="font-family:var(--mono)">3102 001570</span> = 15.70 kg).</li>
+      <li>Check the list of changes, then download the fixed file. Nothing else in the file is changed.</li>
+    </ol>
+    <p class="hint" style="margin-top:8px">Files never leave your computer. Everything happens in this browser tab.</p>
+  </div>
+
+  <div class="panel">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files">
+      <strong>Drop files here or click to choose</strong>
+      <span class="sub">.xlsx, .xls or .csv</span>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv" multiple hidden>
+    <div class="options">
+      <label><input type="checkbox" id="optBlank"> Also fill blank weights</label>
+      <label><input type="checkbox" id="optMismatch"> Also correct weights that don't match the barcode</label>
+    </div>
+  </div>
+
+  <div id="results"></div>
+  <div class="actions" id="allActions" hidden>
+    <button class="primary" id="downloadAll">Download all fixed files</button>
+  </div>
+</main>
+
+<script>
+// ---------- GS1 parsing ----------
+// Data lengths (excluding the AI) for fixed-length AIs. Anything else is variable
+// length and runs to a GS (FNC1) separator or the end of the string.
+const FIXED = { '00': 18, '01': 14, '02': 14, '03': 14, '04': 16, '11': 6, '12': 6, '13': 6,
+  '14': 6, '15': 6, '16': 6, '17': 6, '18': 6, '19': 6, '20': 2, '31': 6, '32': 6, '33': 6,
+  '34': 6, '35': 6, '36': 6, '41': 13 };
+const FOUR_DIGIT = /^(31|32|33|34|35|36|39|70|71|72|80|81|82)/;
+const THREE_DIGIT = /^(24|25|40|41|42|43)/;
+const GS = '\x1d';
+
+function aiLength(s) {
+  if (FOUR_DIGIT.test(s)) return 4;
+  if (THREE_DIGIT.test(s)) return 3;
+  return 2;
+}
+
+// Returns [{ai, value}] or null if the string doesn't parse cleanly.
+function parseGS1(raw) {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  if (s.includes('(')) {
+    const out = [];
+    const re = /\((\d{2,4})\)([^(]*)/g;
+    let m;
+    while ((m = re.exec(s))) out.push({ ai: m[1], value: m[2].replace(/[\s\x1d]/g, '') });
+    return out.length ? out : null;
+  }
+  s = s.replace(/^\]C1|^\]d2|^\]Q3/, '').replace(/[\s]/g, '');
+  if (!/^[\x1d0-9A-Za-z!"%&'()*+,\-./:;<=>?_]+$/.test(s)) return null;
+  const out = [];
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] === GS) { i++; continue; }
+    const len = aiLength(s.slice(i, i + 2));
+    const ai = s.slice(i, i + len);
+    if (ai.length < len || !/^\d+$/.test(ai)) return null;
+    i += len;
+    const fixed = FIXED[ai.slice(0, 2)];
+    let value;
+    if (fixed && !(ai.slice(0, 2) === '41' && len === 3 && ai > '417')) {
+      value = s.slice(i, i + fixed);
+      if (value.length < fixed) return null;
+      i += fixed;
+    } else {
+      const end = s.indexOf(GS, i);
+      value = end === -1 ? s.slice(i) : s.slice(i, end);
+      i = end === -1 ? s.length : end + 1;
+    }
+    out.push({ ai, value });
+  }
+  return out.length ? out : null;
+}
+
+function round(n, dp) { const f = Math.pow(10, dp); return Math.round(n * f) / f; }
+
+// Net kg (310n) preferred, then gross kg (330n), then net lb (320n) converted.
+function weightFromGS1(raw) {
+  const parts = parseGS1(raw);
+  if (!parts) return null;
+  const pick = (prefix) => parts.find(p => p.ai.length === 4 && p.ai.startsWith(prefix) && /^\d{6}$/.test(p.value));
+  let p = pick('310');
+  if (p) { const dp = +p.ai[3]; return { kg: round(+p.value / Math.pow(10, dp), dp), ai: p.ai, note: '' }; }
+  p = pick('330');
+  if (p) { const dp = +p.ai[3]; return { kg: round(+p.value / Math.pow(10, dp), dp), ai: p.ai, note: 'gross weight' }; }
+  p = pick('320');
+  if (p) { const dp = +p.ai[3]; return { kg: round(+p.value / Math.pow(10, dp) * 0.45359237, 2), ai: p.ai, note: 'converted from lb' }; }
+  return null;
+}
+
+// Barcode with the AIs coloured and the weight highlighted, for the change list.
+function prettyBarcode(raw) {
+  const parts = parseGS1(raw);
+  if (!parts) return esc(raw);
+  return parts.map(p => {
+    const w = /^3[123]0\d$/.test(p.ai);
+    return `<span class="ai">(${p.ai})</span>${w ? `<span class="wt">${esc(p.value)}</span>` : esc(p.value)}`;
+  }).join('');
+}
+
+// ---------- spreadsheet handling ----------
+const files = [];   // { name, ext, wb, ws, headerRow, cols, weightCol, codeCol, result }
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function cellVal(ws, r, c) {
+  const cell = ws[XLSX.utils.encode_cell({ r, c })];
+  return cell ? (cell.v ?? '') : '';
+}
+
+function analyseSheet(ws) {
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  // Header row: first row in the top 15 that mentions "weight".
+  let headerRow = range.s.r;
+  for (let r = range.s.r; r <= Math.min(range.e.r, range.s.r + 15); r++) {
+    let found = false;
+    for (let c = range.s.c; c <= range.e.c; c++) if (/weight/i.test(String(cellVal(ws, r, c)))) found = true;
+    if (found) { headerRow = r; break; }
+  }
+  const cols = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    cols.push({ c, name: String(cellVal(ws, headerRow, c)).trim() || XLSX.utils.encode_col(c) });
+  }
+  // Weight column: prefer "expected/net weight", then anything with "weight" that isn't gross.
+  const score = n => /net\s*weight|expected\s*weight/i.test(n) ? 3 : /weight/i.test(n) && !/gross|uom|unit/i.test(n) ? 2 : /weight/i.test(n) ? 1 : 0;
+  const weightCol = cols.slice().sort((a, b) => score(b.name) - score(a.name))[0];
+  // Barcode column: whichever column has the most values containing a GS1 weight.
+  let best = null, bestHits = 0;
+  const sampleEnd = Math.min(range.e.r, headerRow + 300);
+  for (const col of cols) {
+    let hits = 0;
+    for (let r = headerRow + 1; r <= sampleEnd; r++) if (weightFromGS1(cellVal(ws, r, col.c))) hits++;
+    if (hits > bestHits) { bestHits = hits; best = col; }
+  }
+  return { range, headerRow, cols, weightCol: score(weightCol?.name || '') ? weightCol.c : null, codeCol: best ? best.c : null };
+}
+
+function isZero(v) {
+  if (v === '' || v == null) return false;
+  const n = Number(String(v).replace(/,/g, '').trim());
+  return !isNaN(n) && n === 0;
+}
+
+function processFile(f) {
+  const opts = { blank: optBlank.checked, mismatch: optMismatch.checked };
+  const { ws, headerRow, range, weightCol, codeCol, cols } = f;
+  const ctxCols = cols.filter(c => /item\s*code|item\s*name|description|sscc|pallet/i.test(c.name) && c.c !== codeCol).slice(0, 3);
+  const res = { rows: 0, zero: 0, fixed: [], failed: [], mismatches: [], ctxCols };
+  if (weightCol == null || codeCol == null) { f.result = res; return; }
+  for (let r = headerRow + 1; r <= range.e.r; r++) {
+    const code = cellVal(ws, r, codeCol);
+    const wAddr = XLSX.utils.encode_cell({ r, c: weightCol });
+    const wCell = ws[wAddr];
+    const wVal = wCell ? wCell.v : '';
+    if (code === '' && (wVal === '' || wVal == null)) continue;
+    res.rows++;
+    const blank = wVal === '' || wVal == null;
+    const zero = isZero(wVal);
+    const parsed = weightFromGS1(code);
+    const row = { r, excelRow: r + 1, code, old: blank ? '(blank)' : wVal, parsed,
+      ctx: ctxCols.map(c => cellVal(ws, r, c.c)) };
+    if (zero || (blank && opts.blank)) {
+      res.zero++;
+      if (parsed) { row.apply = true; res.fixed.push(row); }
+      else res.failed.push(row);
+    } else if (parsed && !blank && !isNaN(Number(wVal)) && Math.abs(Number(wVal) - parsed.kg) > 0.005) {
+      row.apply = opts.mismatch;
+      res.mismatches.push(row);
+    }
+  }
+  f.result = res;
+}
+
+function buildOutput(f) {
+  // Work on a copy so re-running with different options always starts from the original.
+  const wb = XLSX.read(f.bytes, readOpts(f.ext));
+  const ws = wb.Sheets[f.sheetName];
+  const rows = [...f.result.fixed, ...f.result.mismatches.filter(m => m.apply)];
+  for (const row of rows) {
+    const addr = XLSX.utils.encode_cell({ r: row.r, c: f.weightCol });
+    const prev = ws[addr] || {};
+    ws[addr] = { t: 'n', v: row.parsed.kg };
+    if (prev.z && prev.z !== 'General') ws[addr].z = prev.z;
+    if (prev.s) ws[addr].s = prev.s;
+  }
+  const dot = f.name.lastIndexOf('.');
+  const base = dot > 0 ? f.name.slice(0, dot) : f.name;
+  if (f.ext === 'csv') {
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    return { name: `${base} FIXED.csv`, blob: new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }) };
+  }
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellDates: true });
+  return { name: `${base} FIXED.xlsx`, blob: new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) };
+}
+
+function download({ name, blob }) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+function readOpts(ext) {
+  // raw: true keeps CSV barcodes as text - otherwise long numbers lose digits.
+  return ext === 'csv' ? { type: 'array', raw: true } : { type: 'array', cellDates: true, cellNF: true, cellStyles: true };
+}
+
+// ---------- UI ----------
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const results = document.getElementById('results');
+const banner = document.getElementById('banner');
+const optBlank = document.getElementById('optBlank');
+const optMismatch = document.getElementById('optMismatch');
+const allActions = document.getElementById('allActions');
+
+function showError(msg) { banner.className = 'banner error'; banner.textContent = msg; banner.hidden = false; }
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+[optBlank, optMismatch].forEach(el => el.addEventListener('change', () => { files.forEach(processFile); render(); }));
+document.getElementById('downloadAll').addEventListener('click', () => {
+  files.filter(canDownload).forEach((f, i) => setTimeout(() => download(buildOutput(f)), i * 400));
+});
+
+function canDownload(f) {
+  const r = f.result;
+  return r && (r.fixed.length || r.mismatches.some(m => m.apply));
+}
+
+async function addFiles(list) {
+  banner.hidden = true;
+  if (typeof XLSX === 'undefined') { showError('The spreadsheet library failed to load. Check your internet connection and refresh the page.'); return; }
+  for (const file of list) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const wb = XLSX.read(bytes, readOpts(ext));
+      // Use the first sheet that has a weight column.
+      let chosen = null;
+      for (const name of wb.SheetNames) {
+        const a = analyseSheet(wb.Sheets[name]);
+        if (a.weightCol != null) { chosen = { name, a }; break; }
+      }
+      if (!chosen) chosen = { name: wb.SheetNames[0], a: analyseSheet(wb.Sheets[wb.SheetNames[0]]) };
+      const f = { name: file.name, ext, bytes, wb, sheetName: chosen.name, ws: wb.Sheets[chosen.name], ...chosen.a };
+      processFile(f);
+      files.unshift(f);
+    } catch (err) {
+      showError(`Couldn't read ${file.name}: ${err.message}`);
+    }
+  }
+  render();
+}
+
+function colOptions(f, selected) {
+  return `<option value="">Select…</option>` + f.cols.map(c =>
+    `<option value="${c.c}" ${c.c === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+}
+
+function changeTable(f, rows, kind) {
+  const ctxHead = f.result.ctxCols.map(c => `<th>${esc(c.name)}</th>`).join('');
+  const body = rows.map(row => {
+    const ctx = row.ctx.map(v => `<td>${esc(v instanceof Date ? v.toLocaleDateString() : v)}</td>`).join('');
+    let newCell, status;
+    if (!row.parsed) { newCell = '-'; status = `<span class="pill bad">No weight in barcode</span>`; }
+    else {
+      newCell = row.parsed.kg;
+      status = kind === 'mismatch'
+        ? (row.apply ? `<span class="pill ok">Corrected</span>` : `<span class="pill warn">Not changed</span>`)
+        : `<span class="pill ok">Fixed</span>`;
+      if (row.parsed.note) status += ` <span class="pill warn">${esc(row.parsed.note)}</span>`;
+    }
+    return `<tr><td class="num">${row.excelRow}</td>${ctx}<td class="mono">${prettyBarcode(row.code)}</td>
+      <td class="num">${esc(row.old)}</td><td class="num"><strong>${newCell}</strong></td><td>${status}</td></tr>`;
+  }).join('');
+  return `<div class="tableWrap"><table><thead><tr><th>Row</th>${ctxHead}<th>Barcode</th><th>Was</th><th>Barcode kg</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function render() {
+  results.innerHTML = files.map((f, i) => {
+    const r = f.result;
+    const header = `<div class="fileHead"><h2>${esc(f.name)}</h2><span class="sub">sheet "${esc(f.sheetName)}"</span></div>`;
+    const pick = `<div class="colPick">
+        <div><label>Weight column</label><select data-i="${i}" data-k="weightCol">${colOptions(f, f.weightCol)}</select></div>
+        <div><label>GS1 barcode column</label><select data-i="${i}" data-k="codeCol">${colOptions(f, f.codeCol)}</select></div>
+      </div>`;
+    if (f.weightCol == null || f.codeCol == null) {
+      return `<div class="panel">${header}<div class="banner error" style="margin:10px 0 0">Couldn't find the ${f.weightCol == null ? 'weight' : 'GS1 barcode'} column automatically - pick it below.</div>${pick}</div>`;
+    }
+    const applied = r.fixed.length + r.mismatches.filter(m => m.apply).length;
+    const stats = `<div class="stat-row">
+        <div class="stat"><div class="n">${r.rows}</div><div class="k">Rows</div></div>
+        <div class="stat ${r.zero ? 'warn' : 'ok'}"><div class="n">${r.zero}</div><div class="k">Zero weights</div></div>
+        <div class="stat ok"><div class="n">${r.fixed.length}</div><div class="k">Fixed</div></div>
+        <div class="stat ${r.failed.length ? 'bad' : ''}"><div class="n">${r.failed.length}</div><div class="k">Couldn't fix</div></div>
+        <div class="stat ${r.mismatches.length ? 'warn' : ''}"><div class="n">${r.mismatches.length}</div><div class="k">Don't match barcode</div></div>
+      </div>`;
+    const msg = !r.zero && !applied
+      ? `<p class="hint" style="margin:0">No zero weights in this file - nothing to fix.</p>` : '';
+    const failed = r.failed.length ? `<details open><summary style="color:var(--critical)">${r.failed.length} zero weight${r.failed.length > 1 ? 's' : ''} couldn't be fixed - no weight in the barcode. Fix these by hand.</summary>${changeTable(f, r.failed, 'zero')}</details>` : '';
+    const fixed = r.fixed.length ? `<details open><summary>${r.fixed.length} weight${r.fixed.length > 1 ? 's' : ''} filled in from the barcode</summary>${changeTable(f, r.fixed, 'zero')}</details>` : '';
+    const mism = r.mismatches.length ? `<details><summary>${r.mismatches.length} non-zero weight${r.mismatches.length > 1 ? 's' : ''} don't match the barcode ${optMismatch.checked ? '(corrected)' : '(left as is - tick the option above to correct)'}</summary>${changeTable(f, r.mismatches, 'mismatch')}</details>` : '';
+    return `<div class="panel">${header}${stats}${msg}
+      <div class="actions" style="margin-top:0">
+        <button class="primary" data-dl="${i}" ${applied ? '' : 'disabled'}>Download fixed file (${applied} change${applied === 1 ? '' : 's'})</button>
+        <button data-rm="${i}">Remove</button>
+      </div>
+      ${failed}${fixed}${mism}
+      <details><summary>Columns used</summary>${pick}</details>
+    </div>`;
+  }).join('');
+  allActions.hidden = files.filter(canDownload).length < 2;
+}
+
+results.addEventListener('click', e => {
+  const dl = e.target.closest('[data-dl]');
+  if (dl) { download(buildOutput(files[+dl.dataset.dl])); return; }
+  const rm = e.target.closest('[data-rm]');
+  if (rm) { files.splice(+rm.dataset.rm, 1); render(); }
+});
+results.addEventListener('change', e => {
+  const sel = e.target.closest('select[data-k]');
+  if (!sel) return;
+  const f = files[+sel.dataset.i];
+  f[sel.dataset.k] = sel.value === '' ? null : +sel.value;
+  processFile(f);
+  render();
+});
+</script>
+</body>
+</html>
